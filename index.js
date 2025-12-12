@@ -58,6 +58,17 @@ async function run() {
       res.send(result);
     });
 
+     app.patch("/users/:id", async (req, res) => {
+      const userInfo = req.body;
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const update = {
+        $set: userInfo,
+      };
+      const result = await usersCollection.updateOne(query, update);
+      res.send(result);
+    });
+
     //lessons related apis
     app.post("/lessons", async (req, res) => {
       const lesson = req.body;
@@ -252,18 +263,16 @@ async function run() {
     });
 
      //payment related apis
-    app.post("/create-checkout-session", async (req, res) => {
+    app.post("/payment-checkout-session", async (req, res) => {
       const paymentInfo = req.body;
       const session = await stripe.checkout.sessions.create({
         line_items: [
           {
             // Provide the exact Price ID (for example, price_1234) of the product you want to sell
             price_data: {
-              currency: "USD",
+              currency: "usd",
               unit_amount: 3000,
-              product_data: {
-                name: "Be A Premium Member",
-              },
+              product_data: { name: "Be a Premium Member" },
             },
             quantity: 1,
           },
@@ -271,9 +280,11 @@ async function run() {
         mode: "payment",
         metadata: {
           email: paymentInfo.email,
+          displayName: paymentInfo.displayName,
+          photoURL: paymentInfo.photoURL,
         },
         customer_email: paymentInfo.email,
-        success_url: `${process.env.SITE_DOMAIN}/payment-success`,
+         success_url: `${process.env.SITE_DOMAIN}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${process.env.SITE_DOMAIN}/payment-cancelled`,
       });
       res.send({ url: session.url });
