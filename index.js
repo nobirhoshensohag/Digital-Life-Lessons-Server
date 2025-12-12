@@ -27,7 +27,7 @@ const client = new MongoClient(uri, {
 async function run() {
   try {
     
-     const db = client.db("sage");
+     const db = client.db("digital-life-lessons");
     const usersCollection = db.collection("users");
     const lessonsCollection = db.collection("lessons");
     const favoritesCollection = db.collection("favorites");
@@ -68,7 +68,13 @@ async function run() {
     });
     app.get("/lessons", async (req, res) => {
       const isPrivate = req.query.isPrivate;
-      const { email, limit = 0, skip = 0, sort = "latest", order } = req.query;
+       const {
+        email,
+        limit = 0,
+        skip = 0,
+        sort = "postedAt",
+        order,
+      } = req.query;
       const query = {};
       const sortOption = {};
       sortOption[sort] = order === "asc" ? 1 : -1;
@@ -80,7 +86,7 @@ async function run() {
       }
       const result = await lessonsCollection
         .find(query)
-        .sort()
+        .sort(sortOption)
         .limit(Number(limit))
         .skip(Number(skip))
         .toArray();
