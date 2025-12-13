@@ -76,7 +76,7 @@ async function run() {
       lesson.likes = 0;
       lesson.favorites = 0;
       lesson.postedAt = new Date();
-      lesson.isFeatured = false;
+      lesson.isFeatured = "false";
 
       const result = await lessonsCollection.insertOne(lesson);
       res.send(result);
@@ -91,12 +91,16 @@ async function run() {
         skip = 0,
         sort = "postedAt",
         search = "",
+        isFeatured,
       } = req.query;
       const query = {};
       const sortOption = {};
       sortOption[sort || "postedAt"] = -1;
       if (isPrivate) {
         query.isPrivate = isPrivate;
+      }
+       if (isFeatured) {
+        query.isFeatured = isFeatured;
       }
       if (email) {
         query.email = email;
@@ -120,6 +124,53 @@ async function run() {
       const count = await lessonsCollection.countDocuments(query);
       res.send({ result, total: count });
     });
+
+     app.get("/top-contributors-week", async (req, res) => {
+      try {
+        const oneWeekAgo = new Date();
+        oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+
+        const lessons = await lessonsCollection
+          .find({ postedAt: { $gte: oneWeekAgo } })
+          .toArray();
+
+        const freq = {};
+        lessons.forEach((lesson) => {
+          const email = lesson.email;
+          if (!freq[email]) {
+            freq[email] = {
+              email: lesson.email,
+              name: lesson.name,
+              authorImage: lesson.authorImage,
+              count: 0,
+            };
+          }
+          freq[email].count++;
+        });
+
+        let contributors = Object.values(freq)
+          .sort((a, b) => b.count - a.count)
+          .slice(0, 4); //top 4
+
+        contributors = await Promise.all(
+          contributors.map(async (contributor) => {
+            const user = await usersCollection.findOne({
+              email: contributor.email,
+            });
+            return {
+              ...contributor,
+              isPremium: user?.isPremium ? "true" : "false",
+            };
+          })
+        );
+
+        res.send({ contributors });
+      } catch (err) {
+        console.error(err);
+        res.status(500).send({ error: "Something went wrong" });
+      }
+    });
+
     app.get("/lessons/:id", async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
@@ -297,7 +348,7 @@ async function run() {
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
   } finally {
     
-    await client.close();
+    
   }
 }
 run().catch(console.dir);
@@ -310,3 +361,5 @@ app.get('/', (req, res) => {
 app.listen(port, () => {
   console.log(`Server running on port ${port}`)
 })
+
+
