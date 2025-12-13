@@ -57,16 +57,56 @@ async function run() {
       const result = await usersCollection.find(query).toArray();
       res.send(result);
     });
+    const { ObjectId } = require("mongodb");
 
-     app.patch("/users/:id", async (req, res) => {
-      const userInfo = req.body;
-      const id = req.params.id;
-      const query = { _id: new ObjectId(id) };
-      const update = {
-        $set: userInfo,
-      };
-      const result = await usersCollection.updateOne(query, update);
-      res.send(result);
+      app.patch("/users/:id", async (req, res) => {
+      const userId = req.params.id;
+      const { displayName, photoURL } = req.body;
+      const userQuery = { _id: new ObjectId(userId) };
+
+      try {
+        const userUpdateResult = await usersCollection.updateOne(userQuery, {
+          $set: req.body,
+        });
+
+        const updatedUser = await usersCollection.findOne(userQuery);
+        const userEmail = updatedUser.email;
+
+        await favoritesCollection.updateMany(
+          { posterEmail: userEmail },
+          { $set: { posterName: displayName, posterImage: photoURL } }
+        );
+
+        await likesCollection.updateMany(
+          { posterEmail: userEmail },
+          { $set: { posterName: displayName, posterImage: photoURL } }
+        );
+
+        await lessonsCollection.updateMany(
+          { "comments.commenterEmail": userEmail },
+          {
+            $set: {
+              "comments.$[elem].commenter": displayName,
+              "comments.$[elem].commenterImage": photoURL,
+            },
+          },
+          {
+            arrayFilters: [{ "elem.commenterEmail": userEmail }],
+            multi: true,
+          }
+        );
+
+        res.send({
+          success: true,
+          message: "User and all references updated successfully",
+          userUpdateResult,
+        });
+      } catch (error) {
+        console.error(error);
+        res
+          .status(500)
+          .send({ success: false, message: "Update failed", error });
+      }
     });
 
     //lessons related apis
@@ -183,12 +223,7 @@ async function run() {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
       const update = {
-        $push: {
-          comments: {
-            $each: [updatedLesson],
-            $position: 0,
-          },
-        },
+        $set: updatedLesson,
       };
       const result = await lessonsCollection.updateOne(query, update);
       res.send(result);
@@ -237,6 +272,16 @@ async function run() {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
       const result = await favoritesCollection.findOne(query);
+      res.send(result);
+    });
+    app.patch("/favorites/:postId", async (req, res) => {
+      const postId = req.params.postId;
+      const query = { postId: postId };
+      const { title, image } = req.body;
+      const update = {
+        $set: { postTitle: title, postImage: image },
+      };
+      const result = await favoritesCollection.updateMany(query, update);
       res.send(result);
     });
     app.delete("/favorites/:id", async (req, res) => {
@@ -334,8 +379,8 @@ async function run() {
           {
             // Provide the exact Price ID (for example, price_1234) of the product you want to sell
             price_data: {
-              currency: "usd",
-              unit_amount: 3000,
+              currency: "bdt",
+              unit_amount: 150000,
               product_data: { name: "Be a Premium Member" },
             },
             quantity: 1,
